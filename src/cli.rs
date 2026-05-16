@@ -40,6 +40,10 @@ pub struct Cli {
     #[arg(long, global = true, env = "OPENCODE_CONTEXT_WINDOW")]
     pub context_window: Option<usize>,
 
+    /// Embedding model (overrides config). Env: OPENCODE_EMBEDDING_MODEL
+    #[arg(long, global = true, env = "OPENCODE_EMBEDDING_MODEL")]
+    pub embedding_model: Option<String>,
+
     #[command(subcommand)]
     pub cmd: Cmd,
 }
@@ -111,6 +115,7 @@ pub async fn run(args: Cli) -> Result<()> {
     if let Some(t) = args.temperature { cfg.temperature = t; }
     if let Some(l) = args.language { cfg.language = Some(l); }
     if let Some(c) = args.context_window { cfg.context_window = c; }
+    if let Some(e) = args.embedding_model { cfg.embedding_model = e; }
 
     let repo = args
         .repo
