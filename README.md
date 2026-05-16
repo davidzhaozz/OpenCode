@@ -49,12 +49,24 @@ BM25 scoring lives in src/rag/bm25.rs:53 (the `score` method on `Bm25Index`). It
 
 ### Model requirements for chat
 
-Tool calling requires a model that's actually trained for it. `chat` auto-upgrades the default `llama3:8b` to `llama3.1:8b`, which works reliably via Ollama. Better quality (especially for multi-step debugging or larger edits): `qwen2.5-coder:14b` or `qwen2.5-coder:32b`.
+Tool calling requires a model that's actually trained for it.
+
+- **`llama3:8b`** does NOT support tool calling — `chat` auto-upgrades it to `llama3.1:8b`.
+- **`llama3.1:8b`** is the *minimum* viable model. Use it only for simple, one-shot tasks: a single grep, one targeted edit, a quick file question. It will misbehave on anything involving multiple coordinated edits, debugging loops, or careful refactors — expect hallucinated paths, malformed JSON arguments, and repeated identical tool calls.
+- **For anything beyond trivial single edits, do NOT use `llama3.1:8b`.** Switch to **`qwen2.5-coder:14b`** (recommended floor) or **`qwen2.5-coder:32b`** if you have the RAM. These are coding-tuned and dramatically more reliable in the tool-use loop.
 
 ```sh
-# Bump for hard tasks without touching config
+# One-time install
+ollama pull qwen2.5-coder:14b
+
+# Use it for chat without changing your config
 opencode --model qwen2.5-coder:14b chat
+
+# Or make it the default
+echo 'model = "qwen2.5-coder:14b"' >> ~/.config/opencode/config.toml
 ```
+
+**Rule of thumb:** if you find yourself reaching for `--yes` because the model is making the same mistake repeatedly, the model is too small. Upgrade before adding pressure.
 
 Pass `--yes` to auto-confirm every write/edit/bash call — useful for trusted scripted runs, dangerous interactively.
 
@@ -157,11 +169,11 @@ OpenCode is model-agnostic; the right pick depends on what you're asking it to d
 
 | Model | Pull command | Size | Best for | Notes |
 | --- | --- | --- | --- | --- |
-| **Llama 3 8B** | `ollama pull llama3:8b` | ~4.7 GB | `ask`, simple `edit` | The default. Snappy on Apple Silicon. Will struggle with multi-file generation. |
-| **Llama 3.1 8B** | `ollama pull llama3.1:8b` | ~4.9 GB | Same as above, slightly better reasoning | Drop-in upgrade. |
-| **Qwen 2.5 Coder 7B** | `ollama pull qwen2.5-coder:7b` | ~4.7 GB | Edits, refactors | Coding-tuned 7B; punches above its weight on code tasks. |
-| **Qwen 2.5 Coder 14B** | `ollama pull qwen2.5-coder:14b` | ~9 GB | `scaffold`, multi-file work | Sweet spot for autonomous flows on a 32 GB Mac. |
-| **Qwen 2.5 Coder 32B** | `ollama pull qwen2.5-coder:32b` | ~19 GB | `debug` loops, larger codebases | Needs 32+ GB RAM. Closest local model to hosted-class for coding. |
+| **Llama 3 8B** | `ollama pull llama3:8b` | ~4.7 GB | `ask` only | The default for `ask`. **No tool calling** — `chat` will auto-upgrade away from it. |
+| **Llama 3.1 8B** | `ollama pull llama3.1:8b` | ~4.9 GB | `ask`, trivial `chat` only | Minimum viable for `chat`. **Do not use for complicated edits, multi-step debugging, or autonomous loops** — it will hallucinate paths and spiral. |
+| **Qwen 2.5 Coder 7B** | `ollama pull qwen2.5-coder:7b` | ~4.7 GB | `edit`, simple `chat` tasks | Coding-tuned 7B; better tool calling than Llama 3.1 8B at similar size. |
+| **Qwen 2.5 Coder 14B** | `ollama pull qwen2.5-coder:14b` | ~9 GB | **`chat`, `scaffold`, real coding work** | **Recommended floor for `chat`.** Sweet spot on a 32 GB Mac. Use this if `llama3.1:8b` is misbehaving. |
+| **Qwen 2.5 Coder 32B** | `ollama pull qwen2.5-coder:32b` | ~19 GB | Hard `debug` loops, larger codebases | Needs 32+ GB RAM. Closest local model to hosted-class for coding. |
 | **DeepSeek-Coder-V2 16B** | `ollama pull deepseek-coder-v2:16b` | ~9 GB | Alt for `scaffold` / `debug` | MoE — fast inference for its size. |
 
 After pulling, switch by editing `~/.config/opencode/config.toml`:
