@@ -14,8 +14,15 @@ pub async fn run(args: &Value, ctx: &ToolCtx) -> Result<String> {
     let limit = limit.min(MAX_LIMIT);
 
     let full = resolve(ctx, path);
-    let text = std::fs::read_to_string(&full)
-        .map_err(|e| anyhow!("read_file {}: {}", full.display(), e))?;
+    // Consult cache first: mtime-keyed file_reads. Hit = avoid disk + utf8 work.
+    let text = if let Some(cached) = ctx.cache.get_file_read(&full) {
+        cached
+    } else {
+        let t = std::fs::read_to_string(&full)
+            .map_err(|e| anyhow!("read_file {}: {}", full.display(), e))?;
+        let _ = ctx.cache.put_file_read(&full, &t);
+        t
+    };
 
     let total = text.lines().count();
     let start = offset.saturating_sub(1);

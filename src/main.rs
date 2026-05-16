@@ -1,10 +1,13 @@
 mod agent;
+mod cache;
 mod cli;
 mod config;
 mod diff;
 mod exec;
 mod llm;
+mod manifest;
 mod rag;
+mod symbols;
 mod tools;
 
 use anyhow::Result;

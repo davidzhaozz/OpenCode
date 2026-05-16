@@ -25,12 +25,26 @@ All writes are gated on a `y/N` prompt unless you pass `--yes`.
 
 | Tool | What the model can do | Confirmation |
 | --- | --- | --- |
-| `read_file` | Read any file with optional line range. | auto |
+| `find_symbol` | **Tree-sitter symbol lookup** by exact or partial name. Instant. | auto |
+| `semantic_search` | **Hybrid BM25 + embedding search** for conceptual queries. | auto |
+| `read_file` | Read any file with optional line range. Mtime-cached. | auto |
 | `list_dir` | List directory entries. | auto |
 | `grep` | Regex search (honors `.gitignore`). | auto |
 | `edit_file` | Replace an exact substring in a file. | y/N |
 | `write_file` | Create or overwrite a file. | y/N |
 | `bash` | Run a shell command in the repo dir. | y/N |
+
+When you start `chat`, OpenCode builds a small **intelligence layer** before the first prompt:
+
+- A **repo manifest** (depth-capped tree + per-file one-line summaries) is injected into the system prompt so the model boots already oriented and skips the "let me explore" phase.
+- A **tree-sitter symbol index** (Rust, Python, JS/TS, Go) makes `find_symbol("UserService")` return the exact definition line in milliseconds — replacing 3–5 grep+read calls per "where is X" question.
+- A **persistent sqlite cache** at `~/.cache/opencode/cache.sqlite` stores file reads, symbol tables, file summaries, and dense embeddings. Second-run indexing is typically 20–30× faster than the first run (e.g. 5.8s → 0.2s on this repo).
+- **Hybrid retrieval** (BM25 + dense embeddings, fused via Reciprocal Rank Fusion) handles both keyword and conceptual queries. Embeddings default to `nomic-embed-text` via Ollama — if the model isn't pulled, retrieval silently falls back to BM25-only.
+
+```sh
+# One-time, to enable embeddings:
+ollama pull nomic-embed-text
+```
 
 The loop runs up to 25 tool calls per user turn before yielding back to you. `/reset` clears history, `/exit` or Ctrl-D leaves.
 

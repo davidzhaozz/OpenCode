@@ -6,7 +6,7 @@ const K1: f32 = 1.5;
 const B: f32 = 0.75;
 
 pub struct Bm25Index {
-    chunks: Vec<Chunk>,
+    pub chunks: Vec<Chunk>,
     /// Per-chunk term frequencies after tokenization.
     tf: Vec<HashMap<String, u32>>,
     /// Document frequency per term across the corpus.

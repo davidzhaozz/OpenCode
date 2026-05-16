@@ -4,19 +4,51 @@ use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use serde_json::Value;
 use std::path::Path;
+use std::sync::Arc;
+use std::time::Instant;
 
+use crate::cache::Cache;
 use crate::config::Config;
 use crate::llm::{openai, AssistantMessage, ChatMessage, GenOpts, ToolCall};
+use crate::manifest;
+use crate::rag::{hybrid::HybridRetriever, scan::scan_repo};
+use crate::symbols;
 use crate::tools::{self, ToolCtx};
 
 const MAX_TOOL_CALLS_PER_TURN: usize = 25;
 
 pub async fn run(cfg: &Config, repo: &Path, auto_yes: bool) -> Result<()> {
+    // ---- Build the intelligence layer up-front ----
+    let cache = Arc::new(Cache::open()?);
+
+    let t0 = Instant::now();
+    eprint!("{} ", style("indexing").dim());
+    let manifest = manifest::build(repo, &cache)?;
+    eprint!("{} ", style(format!("manifest({} files)", manifest.file_count)).dim());
+
+    let symbol_index = symbols::build(repo, &cache)?;
+    let n_syms: usize = symbol_index.by_name.values().map(|v| v.len()).sum();
+    eprint!("{} ", style(format!("symbols({n_syms})")).dim());
+
+    let chunks = scan_repo(repo)?;
+    let n_chunks = chunks.len();
+    let retriever = crate::rag::hybrid::build(chunks, cfg, cache.clone()).await?;
+    eprint!("{} ", style(format!("embeddings({n_chunks} chunks)")).dim());
+
+    eprintln!("{}", style(format!("[{:.1}s]", t0.elapsed().as_secs_f32())).dim());
+
+    let ctx = ToolCtx {
+        repo: repo.to_path_buf(),
+        auto_yes,
+        cache,
+        symbols: Arc::new(symbol_index),
+        retriever: Arc::new(retriever),
+    };
+
     let backend = openai::build(cfg);
     let tool_defs = tools::definitions();
-    let ctx = ToolCtx { repo: repo.to_path_buf(), auto_yes };
 
-    let mut history: Vec<ChatMessage> = vec![ChatMessage::system(system_prompt(repo))];
+    let mut history: Vec<ChatMessage> = vec![ChatMessage::system(system_prompt(repo, &manifest.rendered))];
 
     let mut rl = DefaultEditor::new()?;
     eprintln!(
@@ -79,7 +111,6 @@ async fn run_turn(
             return Ok(());
         }
 
-        // Save the assistant turn (with its tool calls) before running them.
         history.push(ChatMessage::assistant_with_calls(msg.content.clone(), msg.tool_calls.clone()));
         if !msg.content.is_empty() {
             println!("{}", msg.content);
@@ -111,29 +142,37 @@ async fn run_turn(
     Ok(())
 }
 
-fn system_prompt(repo: &Path) -> String {
+fn system_prompt(repo: &Path, manifest_rendered: &str) -> String {
     format!(
         "You are OpenCode, an interactive coding agent operating in the user's repository.\n\
          \n\
          You have tools to investigate and modify code:\n\
-         - read_file: read a file's contents. ALWAYS use this before editing a file.\n\
+         - find_symbol: look up a function/struct/class/etc. by name. **Use this FIRST** when you want \
+           to know where something is defined — it's faster and more accurate than grep.\n\
+         - semantic_search: hybrid BM25 + embedding search for conceptual queries (\"retry logic\", \
+           \"auth flow\"). Use this when you don't know the exact name to look for.\n\
+         - grep: regex search across the repo. Use for strings, comments, anything not a defined symbol.\n\
+         - read_file: read a file's contents. ALWAYS use this before editing a file. Results are cached.\n\
          - list_dir: list a directory's entries.\n\
-         - grep: regex search across the repo (honors .gitignore). Use this to FIND code.\n\
          - edit_file: replace an exact substring in a file (user confirms).\n\
          - write_file: create or overwrite a file (user confirms).\n\
          - bash: run a shell command (user confirms). Use for build/test/format/git/ls.\n\
          \n\
          How to work:\n\
-         - When asked to find something, start with grep or list_dir, then read_file to confirm.\n\
-         - When asked to fix or change something, explore first, then make minimal targeted edits.\n\
+         - Use find_symbol FIRST when looking for a known name; fall back to grep / semantic_search.\n\
          - Read a file BEFORE editing it — edit_file requires an exact unique substring match.\n\
          - Prefer edit_file over write_file when modifying existing files.\n\
          - After making changes, suggest or run a verification command (cargo check, pytest, etc.).\n\
          - When the task is complete, reply with a SHORT plain-text summary and emit NO further tool calls.\n\
          - If a tool returns ERROR, read the message carefully and adjust — don't repeat the same call.\n\
          \n\
-         Working directory: {}\n",
-        repo.display()
+         Working directory: {}\n\
+         \n\
+         === Repository overview ===\n\
+         {}\n\
+         === End repository overview ===\n",
+        repo.display(),
+        manifest_rendered,
     )
 }
 
@@ -141,13 +180,15 @@ fn pretty_call_label(call: &ToolCall) -> String {
     let args: Value = serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
     let s = |k: &str| args.get(k).and_then(|v| v.as_str()).unwrap_or("?");
     match call.function.name.as_str() {
-        "read_file"  => format!("{} {}", style("Read").green(),  s("path")),
-        "list_dir"   => format!("{} {}", style("List").green(),  args.get("path").and_then(|v| v.as_str()).unwrap_or(".")),
-        "grep"       => format!("{} {:?} in {}", style("Grep").green(), s("pattern"), args.get("path").and_then(|v| v.as_str()).unwrap_or(".")),
-        "edit_file"  => format!("{} {}", style("Edit").yellow(), s("path")),
-        "write_file" => format!("{} {}", style("Write").yellow(),s("path")),
-        "bash"       => format!("{} {}", style("Bash").magenta(), s("cmd")),
-        other        => format!("{other}({})", call.function.arguments),
+        "read_file"        => format!("{} {}", style("Read").green(), s("path")),
+        "find_symbol"      => format!("{} {}", style("FindSymbol").green(), s("name")),
+        "semantic_search"  => format!("{} {:?}", style("SemSearch").green(), s("query")),
+        "list_dir"         => format!("{} {}", style("List").green(), args.get("path").and_then(|v| v.as_str()).unwrap_or(".")),
+        "grep"             => format!("{} {:?} in {}", style("Grep").green(), s("pattern"), args.get("path").and_then(|v| v.as_str()).unwrap_or(".")),
+        "edit_file"        => format!("{} {}", style("Edit").yellow(), s("path")),
+        "write_file"       => format!("{} {}", style("Write").yellow(), s("path")),
+        "bash"             => format!("{} {}", style("Bash").magenta(), s("cmd")),
+        other              => format!("{other}({})", call.function.arguments),
     }
 }
 

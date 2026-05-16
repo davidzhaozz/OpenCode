@@ -1,3 +1,4 @@
+pub mod embeddings;
 pub mod openai;
 
 use anyhow::Result;

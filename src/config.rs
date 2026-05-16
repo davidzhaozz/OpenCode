@@ -6,6 +6,11 @@ use std::path::{Path, PathBuf};
 pub struct Config {
     pub backend: Backend,
     pub model: String,
+    /// Embedding model name. Used for semantic retrieval and tool-cache embeddings.
+    /// Defaults to `nomic-embed-text` (Ollama). If the model isn't available,
+    /// embeddings silently fall back to BM25-only retrieval.
+    #[serde(default = "default_embedding_model")]
+    pub embedding_model: String,
     /// Optional language hint passed to the model ("rust", "python", etc.)
     pub language: Option<String>,
     /// Tokens of context the backend can handle (used to budget retrieval)
@@ -13,6 +18,8 @@ pub struct Config {
     /// Sampling temperature
     pub temperature: f32,
 }
+
+fn default_embedding_model() -> String { "nomic-embed-text".to_string() }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Backend {
@@ -33,6 +40,7 @@ impl Default for Config {
                 api_key: None,
             },
             model: "llama3:8b".to_string(),
+            embedding_model: default_embedding_model(),
             language: None,
             context_window: 8192,
             temperature: 0.2,
