@@ -17,7 +17,11 @@ pub async fn run(args: &Value, ctx: &ToolCtx) -> Result<String> {
     let re = Regex::new(pattern).map_err(|e| anyhow!("grep: invalid regex: {e}"))?;
     let root = resolve(ctx, path);
 
-    let walker = WalkBuilder::new(&root).standard_filters(true).hidden(true).build();
+    let walker = WalkBuilder::new(&root)
+        .standard_filters(true)
+        .hidden(true)
+        .filter_entry(crate::walk::entry_filter)
+        .build();
     let mut matches = Vec::new();
     let mut scanned_files = 0usize;
 

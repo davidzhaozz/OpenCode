@@ -35,6 +35,7 @@ pub fn build(root: &Path, cache: &Cache) -> Result<Manifest> {
         .standard_filters(true)
         .hidden(true)
         .max_depth(Some(MAX_DEPTH))
+        .filter_entry(crate::walk::entry_filter)
         .build();
 
     for entry in walker.flatten() {

@@ -9,6 +9,7 @@ mod manifest;
 mod rag;
 mod symbols;
 mod tools;
+mod walk;
 
 use anyhow::Result;
 use clap::Parser;

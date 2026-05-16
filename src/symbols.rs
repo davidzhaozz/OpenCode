@@ -52,7 +52,11 @@ pub fn build(root: &Path, cache: &Cache) -> Result<SymbolIndex> {
     let mut by_name: HashMap<String, Vec<Symbol>> = HashMap::new();
     let mut by_path: HashMap<PathBuf, Vec<Symbol>> = HashMap::new();
 
-    let walker = WalkBuilder::new(root).standard_filters(true).hidden(true).build();
+    let walker = WalkBuilder::new(root)
+        .standard_filters(true)
+        .hidden(true)
+        .filter_entry(crate::walk::entry_filter)
+        .build();
     for entry in walker.flatten() {
         let p = entry.path();
         if !p.is_file() { continue; }

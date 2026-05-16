@@ -24,6 +24,7 @@ pub fn scan_repo(root: &Path) -> Result<Vec<Chunk>> {
     let walker = WalkBuilder::new(root)
         .standard_filters(true)
         .hidden(true)
+        .filter_entry(crate::walk::entry_filter)
         .build();
 
     for entry in walker.flatten() {
