@@ -119,28 +119,57 @@ opencode ask "where is auth handled?"
 
 ## Configuration
 
-`opencode init` writes a TOML config you can edit:
+OpenCode reads configuration from three places, in order of precedence (highest wins):
+
+1. **CLI flag** — e.g. `--model qwen2.5-coder:14b`
+2. **Environment variable** — e.g. `OPENCODE_MODEL=qwen2.5-coder:14b`
+3. **TOML config file** — `~/.config/opencode/config.toml` (or platform equivalent)
+
+The built-in defaults assume a local Ollama at `localhost:11434`. **For anything else — a hosted API, a remote Ollama, a different model — use env vars (recommended) or CLI flags. Don't put server addresses or model names in the config file unless they're truly defaults you want to share across machines.**
+
+### Recommended: shell env vars (no config file needed)
+
+Set your connection details once in your shell init (e.g. `~/.zshrc` or `~/.bashrc`) so they're loaded every new terminal:
+
+```sh
+# OpenCode connection — keep these in shell env, NOT in committed files.
+export OPENCODE_BASE_URL="http://<your-server>:11434/v1"   # remote Ollama, hosted API, etc.
+export OPENCODE_MODEL="qwen2.5-coder:14b"
+export OPENCODE_EMBEDDING_MODEL="nomic-embed-text"
+# export OPENCODE_API_KEY="..."   # only for hosted providers
+```
+
+Then `opencode chat` just works — no config file required. Override per-shell or per-command whenever you need a different model/endpoint.
+
+> **Don't commit your server IP, API keys, or anything that identifies a private machine to a public repo or dotfiles repo.** Use a `.gitignore`'d local file (`.envrc` with [direnv](https://direnv.net/), a private branch, etc.) if you want the values to live in a file.
+
+### `opencode init` (optional)
+
+Writes a TOML config at `~/.config/opencode/config.toml` with built-in defaults:
 
 ```toml
-[backend]
-base_url = "http://localhost:11434/v1"   # Ollama default
-# api_key = "sk-..."                     # only if your backend needs one
-
 model = "llama3:8b"
-language = "rust"                        # optional hint passed to the model
+embedding_model = "nomic-embed-text"
 context_window = 8192
 temperature = 0.2
+
+[backend]
+base_url = "http://localhost:11434/v1"
+# api_key = "sk-..."                     # only if your backend needs one
 ```
+
+This is useful for one-line tweaks like changing `temperature` permanently. **Skip this command entirely if you only want env-var-based config** — OpenCode falls through to built-in defaults when no config file exists.
 
 Pass `--config <path>` to use a different config file per invocation.
 
 ### Per-invocation overrides
 
-Any config value can be overridden on the command line or via an environment variable, without touching the config file:
+Any config value can be overridden on the command line or via an environment variable:
 
 | Flag | Env var | Overrides |
 | --- | --- | --- |
 | `--model <name>` | `OPENCODE_MODEL` | `model` |
+| `--embedding-model <name>` | `OPENCODE_EMBEDDING_MODEL` | `embedding_model` |
 | `--base-url <url>` | `OPENCODE_BASE_URL` | `backend.base_url` |
 | `--api-key <key>` | `OPENCODE_API_KEY` | `backend.api_key` |
 | `--temperature <f>` | `OPENCODE_TEMPERATURE` | `temperature` |
