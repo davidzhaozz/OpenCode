@@ -16,6 +16,30 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub config: Option<PathBuf>,
 
+    /// Model name (overrides config). Env: OPENCODE_MODEL
+    #[arg(long, global = true, env = "OPENCODE_MODEL")]
+    pub model: Option<String>,
+
+    /// Backend base URL (overrides config). Env: OPENCODE_BASE_URL
+    #[arg(long, global = true, env = "OPENCODE_BASE_URL")]
+    pub base_url: Option<String>,
+
+    /// Backend API key (overrides config). Env: OPENCODE_API_KEY
+    #[arg(long, global = true, env = "OPENCODE_API_KEY", hide_env_values = true)]
+    pub api_key: Option<String>,
+
+    /// Sampling temperature (overrides config). Env: OPENCODE_TEMPERATURE
+    #[arg(long, global = true, env = "OPENCODE_TEMPERATURE")]
+    pub temperature: Option<f32>,
+
+    /// Language hint passed to the model. Env: OPENCODE_LANGUAGE
+    #[arg(long, global = true, env = "OPENCODE_LANGUAGE")]
+    pub language: Option<String>,
+
+    /// Context window the backend supports. Env: OPENCODE_CONTEXT_WINDOW
+    #[arg(long, global = true, env = "OPENCODE_CONTEXT_WINDOW")]
+    pub context_window: Option<usize>,
+
     #[command(subcommand)]
     pub cmd: Cmd,
 }
@@ -72,10 +96,16 @@ pub enum Cmd {
 }
 
 pub async fn run(args: Cli) -> Result<()> {
-    let cfg = Config::load(args.config.as_deref())?;
+    let mut cfg = Config::load(args.config.as_deref())?;
+    if let Some(m) = args.model { cfg.model = m; }
+    if let Some(u) = args.base_url { cfg.backend.base_url = u; }
+    if let Some(k) = args.api_key { cfg.backend.api_key = Some(k); }
+    if let Some(t) = args.temperature { cfg.temperature = t; }
+    if let Some(l) = args.language { cfg.language = Some(l); }
+    if let Some(c) = args.context_window { cfg.context_window = c; }
+
     let repo = args
         .repo
-        .clone()
         .unwrap_or_else(|| std::env::current_dir().expect("cwd"));
 
     match args.cmd {

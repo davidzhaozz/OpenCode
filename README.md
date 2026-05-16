@@ -68,6 +68,37 @@ temperature = 0.2
 
 Pass `--config <path>` to use a different config file per invocation.
 
+### Per-invocation overrides
+
+Any config value can be overridden on the command line or via an environment variable, without touching the config file:
+
+| Flag | Env var | Overrides |
+| --- | --- | --- |
+| `--model <name>` | `OPENCODE_MODEL` | `model` |
+| `--base-url <url>` | `OPENCODE_BASE_URL` | `backend.base_url` |
+| `--api-key <key>` | `OPENCODE_API_KEY` | `backend.api_key` |
+| `--temperature <f>` | `OPENCODE_TEMPERATURE` | `temperature` |
+| `--language <lang>` | `OPENCODE_LANGUAGE` | `language` |
+| `--context-window <n>` | `OPENCODE_CONTEXT_WINDOW` | `context_window` |
+
+Precedence: **CLI flag > env var > config file > built-in default.**
+
+Examples:
+
+```sh
+# Try a stronger model for one debug run without touching config
+opencode --model qwen2.5-coder:14b debug -- cargo test
+
+# Point at a hosted endpoint via env vars
+OPENCODE_BASE_URL=https://api.together.xyz/v1 \
+OPENCODE_API_KEY=$TOGETHER_KEY \
+OPENCODE_MODEL=Qwen/Qwen2.5-Coder-32B-Instruct \
+  opencode ask "where is the retry logic?"
+
+# One-off temperature bump for creative scaffolding
+opencode --temperature 0.7 scaffold --out /tmp/idea "a tiny TUI todo app in rust"
+```
+
 ### Swapping backends
 
 OpenCode speaks the OpenAI chat-completions protocol, so any compatible endpoint works. Edit `base_url` and `model`:
