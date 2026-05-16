@@ -153,15 +153,69 @@ opencode --temperature 0.7 scaffold --out /tmp/idea "a tiny TUI todo app in rust
 
 ### Swapping backends
 
-OpenCode speaks the OpenAI chat-completions protocol, so any compatible endpoint works. Edit `base_url` and `model`:
+OpenCode speaks the OpenAI chat-completions protocol, so **any compatible endpoint — local OR remote — works the same way**. There's no separate "remote model" mode; just point `--base-url` at the server.
 
 | Backend | `base_url` | Notes |
 | --- | --- | --- |
-| Ollama (default) | `http://localhost:11434/v1` | `brew install ollama && brew services start ollama` |
+| Ollama (local, default) | `http://localhost:11434/v1` | `brew install ollama && brew services start ollama` |
+| Ollama (remote) | `http://other-host:11434/v1` | Same Ollama, different machine. See [Remote local models](#remote-local-models) below. |
 | llama.cpp | `http://localhost:8080/v1` | `llama-server -m model.gguf -c 8192 --host 127.0.0.1 --port 8080` |
-| Together AI | `https://api.together.xyz/v1` | Set `api_key`. |
-| Groq | `https://api.groq.com/openai/v1` | Set `api_key`. |
-| vLLM / TGI / LM Studio | `http://localhost:<port>/v1` | Whatever your server exposes. |
+| LM Studio | `http://localhost:1234/v1` | LM Studio's built-in server. |
+| vLLM / TGI | `http://localhost:8000/v1` | Whatever your server exposes. |
+| Together AI | `https://api.together.xyz/v1` | Hosted. Set `api_key`. |
+| Groq | `https://api.groq.com/openai/v1` | Hosted. Set `api_key`. |
+| Fireworks | `https://api.fireworks.ai/inference/v1` | Hosted. Set `api_key`. |
+| OpenAI | `https://api.openai.com/v1` | Hosted. Set `api_key`. |
+
+### Hosted-provider one-liners
+
+Each block below is a single complete command — copy, set your key, run:
+
+```sh
+# Together AI — Qwen 2.5 Coder 32B (the cheapest "good" hosted coder)
+OPENCODE_BASE_URL=https://api.together.xyz/v1 \
+OPENCODE_API_KEY=$TOGETHER_API_KEY \
+OPENCODE_MODEL=Qwen/Qwen2.5-Coder-32B-Instruct \
+  opencode chat
+
+# Groq — Llama 3.3 70B (fast)
+OPENCODE_BASE_URL=https://api.groq.com/openai/v1 \
+OPENCODE_API_KEY=$GROQ_API_KEY \
+OPENCODE_MODEL=llama-3.3-70b-versatile \
+  opencode chat
+
+# Fireworks — DeepSeek V3
+OPENCODE_BASE_URL=https://api.fireworks.ai/inference/v1 \
+OPENCODE_API_KEY=$FIREWORKS_API_KEY \
+OPENCODE_MODEL=accounts/fireworks/models/deepseek-v3 \
+  opencode chat
+
+# OpenAI — GPT-4o
+OPENCODE_BASE_URL=https://api.openai.com/v1 \
+OPENCODE_API_KEY=$OPENAI_API_KEY \
+OPENCODE_MODEL=gpt-4o \
+  opencode chat
+```
+
+Set the env vars once in your shell (`~/.zshrc`) and you can omit them from individual commands.
+
+### Remote local models
+
+To run OpenCode on your laptop but use a model running on a beefier desktop or server:
+
+1. **On the server**, expose Ollama on the network:
+   ```sh
+   # bind to all interfaces instead of localhost
+   OLLAMA_HOST=0.0.0.0:11434 ollama serve
+   ```
+   …or set the same env var in `brew services` / systemd.
+
+2. **On the client**, point at it:
+   ```sh
+   opencode --base-url http://server.local:11434/v1 --model qwen2.5-coder:14b chat
+   ```
+
+For a private path, run it over **Tailscale** or an **SSH tunnel** (`ssh -L 11434:localhost:11434 server` then point at `http://localhost:11434/v1`). Don't expose Ollama directly on the public internet — it has no built-in auth.
 
 ## Recommended models
 
