@@ -10,13 +10,53 @@ The whole binary is ~4 MB with no Python or Node runtime to manage.
 
 | Command | What it does |
 | --- | --- |
-| `opencode ask "..."` | Question-answer over the current repo. Retrieves relevant chunks with a code-aware BM25 index (camelCase / snake_case split, `.gitignore`-aware), feeds them to the model. |
+| `opencode chat` | **Interactive REPL** with a tool-use loop, like Claude Code on the CLI. The model decides when to read files, grep, edit, write, or run shell commands. See [Chat mode](#chat-mode) below. |
+| `opencode ask "..."` | One-shot question-answer over the current repo. Retrieves relevant chunks with a code-aware BM25 index (camelCase / snake_case split, `.gitignore`-aware), feeds them to the model. |
 | `opencode edit <file> "..."` | Proposes a change to a file. Shows a colored unified diff. Asks `y/N` before writing. |
 | `opencode scaffold --out <dir> "..."` | Generates a multi-file project from a spec. Previews the tree. Asks `y/N` before writing. |
 | `opencode debug -- <cmd>` | Runs your command (`cargo test`, `pytest`, `make`, anything). On failure, feeds stderr + referenced files to the model, applies a proposed fix, retries. Max 3 iterations by default. |
 | `opencode init` | Writes a default config to `~/.config/opencode/config.toml` (or the platform equivalent). |
 
 All writes are gated on a `y/N` prompt unless you pass `--yes`.
+
+## Chat mode
+
+`opencode chat` starts an interactive REPL where the model investigates and edits your codebase on its own, using a small set of tools:
+
+| Tool | What the model can do | Confirmation |
+| --- | --- | --- |
+| `read_file` | Read any file with optional line range. | auto |
+| `list_dir` | List directory entries. | auto |
+| `grep` | Regex search (honors `.gitignore`). | auto |
+| `edit_file` | Replace an exact substring in a file. | y/N |
+| `write_file` | Create or overwrite a file. | y/N |
+| `bash` | Run a shell command in the repo dir. | y/N |
+
+The loop runs up to 25 tool calls per user turn before yielding back to you. `/reset` clears history, `/exit` or Ctrl-D leaves.
+
+```sh
+opencode chat
+› where is BM25 scoring implemented?
+→ Grep "BM25" in .
+→ Read src/rag/bm25.rs
+BM25 scoring lives in src/rag/bm25.rs:53 (the `score` method on `Bm25Index`). It uses the Okapi BM25 formula with k1=1.5, b=0.75, and a +1-smoothed IDF.
+
+› add a doc comment above `score` explaining the formula
+→ Read src/rag/bm25.rs
+→ Edit src/rag/bm25.rs
+[diff preview, y/N]
+```
+
+### Model requirements for chat
+
+Tool calling requires a model that's actually trained for it. `chat` auto-upgrades the default `llama3:8b` to `llama3.1:8b`, which works reliably via Ollama. Better quality (especially for multi-step debugging or larger edits): `qwen2.5-coder:14b` or `qwen2.5-coder:32b`.
+
+```sh
+# Bump for hard tasks without touching config
+opencode --model qwen2.5-coder:14b chat
+```
+
+Pass `--yes` to auto-confirm every write/edit/bash call — useful for trusted scripted runs, dangerous interactively.
 
 ## Install
 

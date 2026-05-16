@@ -1,4 +1,5 @@
 pub mod ask;
+pub mod chat;
 pub mod debug;
 pub mod edit;
 pub mod scaffold;

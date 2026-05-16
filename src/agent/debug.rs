@@ -81,7 +81,8 @@ pub async fn run(
         ];
         let raw = backend
             .chat(&msgs, &GenOpts { json_mode: true, ..Default::default() })
-            .await?;
+            .await?
+            .content;
         let json = extract_json(&raw)?;
         let fix: Fix = serde_json::from_str(&json)
             .with_context(|| format!("parsing fix plan: {json}"))?;

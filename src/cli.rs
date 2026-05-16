@@ -93,6 +93,14 @@ pub enum Cmd {
         #[arg(last = true, required = true)]
         cmd: Vec<String>,
     },
+
+    /// Interactive chat REPL with a tool-use loop (Claude-Code-style).
+    /// Defaults to llama3.1:8b if no model is specified — it has reliable tool calling.
+    Chat {
+        /// Auto-confirm all edits, writes, and shell commands. Use with caution.
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 pub async fn run(args: Cli) -> Result<()> {
@@ -121,6 +129,15 @@ pub async fn run(args: Cli) -> Result<()> {
         }
         Cmd::Debug { max_iters, yes, cmd } => {
             agent::debug::run(&cfg, &repo, &cmd, max_iters, yes).await?
+        }
+        Cmd::Chat { yes } => {
+            // Default to llama3.1:8b for chat — it has native tool calling.
+            // llama3:8b (non-3.1) emits broken/fake tool calls.
+            if cfg.model == "llama3:8b" {
+                cfg.model = "llama3.1:8b".to_string();
+                eprintln!("(chat: upgraded model llama3:8b → llama3.1:8b for tool calling; override with --model)");
+            }
+            agent::chat::run(&cfg, &repo, yes).await?
         }
     }
     Ok(())

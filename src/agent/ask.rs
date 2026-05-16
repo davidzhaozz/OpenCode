@@ -39,7 +39,7 @@ pub async fn run(cfg: &Config, repo: &Path, question: &str, k: usize) -> Result<
              Cite file paths and line ranges where relevant."
         )),
     ];
-    let answer = backend.chat(&msgs, &GenOpts::default()).await?;
+    let answer = backend.chat(&msgs, &GenOpts::default()).await?.content;
     println!("{answer}");
     Ok(())
 }

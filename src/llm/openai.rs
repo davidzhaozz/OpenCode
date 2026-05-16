@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::llm::{ChatMessage, GenOpts, LlmBackend};
+use crate::llm::{AssistantMessage, ChatMessage, GenOpts, LlmBackend, ToolCall};
 
 pub struct OpenAiBackend {
     base_url: String,
@@ -26,7 +26,7 @@ impl OpenAiBackend {
         }
     }
 
-    pub async fn chat(&self, messages: &[ChatMessage], opts: &GenOpts) -> Result<String> {
+    pub async fn chat(&self, messages: &[ChatMessage], opts: &GenOpts) -> Result<AssistantMessage> {
         #[derive(Serialize)]
         struct Req<'a> {
             model: &'a str,
@@ -36,6 +36,8 @@ impl OpenAiBackend {
             max_tokens: Option<u32>,
             #[serde(skip_serializing_if = "Option::is_none")]
             response_format: Option<ResponseFormat>,
+            #[serde(skip_serializing_if = "<[_]>::is_empty")]
+            tools: &'a [serde_json::Value],
             stream: bool,
         }
         #[derive(Serialize)]
@@ -45,8 +47,13 @@ impl OpenAiBackend {
         struct Resp { choices: Vec<Choice> }
         #[derive(Deserialize)]
         struct Choice { message: RespMsg }
-        #[derive(Deserialize)]
-        struct RespMsg { content: String }
+        #[derive(Deserialize, Default)]
+        struct RespMsg {
+            #[serde(default)]
+            content: Option<String>,
+            #[serde(default)]
+            tool_calls: Option<Vec<ToolCall>>,
+        }
 
         let url = format!("{}/chat/completions", self.base_url);
         let req = Req {
@@ -57,6 +64,7 @@ impl OpenAiBackend {
             response_format: if opts.json_mode {
                 Some(ResponseFormat { kind: "json_object" })
             } else { None },
+            tools: &opts.tools,
             stream: false,
         };
 
@@ -72,14 +80,16 @@ impl OpenAiBackend {
         }
         let parsed: Resp = serde_json::from_str(&body)
             .with_context(|| format!("parsing LLM response: {}", body))?;
-        let content = parsed
+        let msg = parsed
             .choices
             .into_iter()
             .next()
             .ok_or_else(|| anyhow!("no choices in LLM response"))?
-            .message
-            .content;
-        Ok(content)
+            .message;
+        Ok(AssistantMessage {
+            content: msg.content.unwrap_or_default(),
+            tool_calls: msg.tool_calls.unwrap_or_default(),
+        })
     }
 }
 

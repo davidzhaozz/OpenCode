@@ -5,6 +5,7 @@ mod diff;
 mod exec;
 mod llm;
 mod rag;
+mod tools;
 
 use anyhow::Result;
 use clap::Parser;

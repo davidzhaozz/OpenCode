@@ -36,7 +36,7 @@ pub async fn run(
             instruction,
         )),
     ];
-    let proposed_raw = backend.chat(&msgs, &GenOpts::default()).await?;
+    let proposed_raw = backend.chat(&msgs, &GenOpts::default()).await?.content;
     let proposed = strip_fences(&proposed_raw);
 
     if proposed.trim() == original.trim() {

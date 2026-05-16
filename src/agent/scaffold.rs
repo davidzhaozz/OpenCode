@@ -48,7 +48,8 @@ pub async fn run(cfg: &Config, out: &Path, spec: &str, yes: bool) -> Result<()> 
 
     let raw = backend
         .chat(&msgs, &GenOpts { json_mode: true, ..Default::default() })
-        .await?;
+        .await?
+        .content;
     let json = extract_json(&raw)?;
     let plan: Plan = serde_json::from_str(&json)
         .with_context(|| format!("parsing scaffold plan: {}", json))?;
