@@ -176,19 +176,6 @@ src/
 - **No tool-use loop.** The agent doesn't iteratively `Read`/`Grep`/`Bash` like Claude Code or Aider — each command does one shot of retrieval + one model call (`debug` being the exception, which loops on the user's command).
 - **Path safety, not sandbox.** `scaffold` and `debug` refuse absolute paths and `..` segments, but they trust your config and the model to write to the right repo. Run against repos you'd be comfortable letting an editor touch.
 
-## Versioning
-
-OpenCode uses a base-26 versioning scheme: each segment of `MAJOR.MINOR.PATCH`
-rolls from 1 through 25, then resets and bumps the segment above it.
-
-```
-0.0.1 → 0.0.2 → … → 0.0.25 → 0.1.0 → 0.1.1 → … → 0.1.25 → 0.2.0 → … → 0.25.25 → 1.0.0
-```
-
-There is no semantic meaning attached to a bump (no breaking-change implication);
-versions are simply monotonic release counters. The 26-segment cap keeps the
-patch and minor numbers short and visually distinct.
-
 ## License
 
 MIT
